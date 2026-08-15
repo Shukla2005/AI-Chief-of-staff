@@ -6,3 +6,4 @@ langchain-groq
 tavily-python
 google-auth-oauthlib
 streamlit
+langchain-tavily
