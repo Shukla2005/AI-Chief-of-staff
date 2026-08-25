@@ -1,18 +1,19 @@
 import os
 import datetime
+import streamlit as st
+
 from dotenv import load_dotenv
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
 from langchain_google_community import GmailToolkit, CalendarToolkit
 from langchain_tavily import TavilySearch
 from langchain_groq import ChatGroq
 from langchain.agents import create_agent
-from langchain.agents.middleware import HumanInTheLoopMiddleware 
+from langchain.agents.middleware import HumanInTheLoopMiddleware
 from langgraph.types import Command
-from langgraph.checkpoint.memory import InMemorySaver 
+from langgraph.checkpoint.memory import InMemorySaver
 from langchain.tools import tool
 from langchain_core.tools import StructuredTool
 
@@ -52,11 +53,49 @@ class AssistantBackend:
         
         self.supervisor_agent = self._create_supervisor_agent()
 
-    def _load_credentials(self, token_file):
-        if os.path.exists(token_file):
-            return Credentials.from_authorized_user_file(token_file, self.scopes)
-        else:
-            raise FileNotFoundError(f"Token file {token_file} not found. Please authenticate.")
+   def _load_credentials(self, token_file):
+
+    # --------------------------------
+    # LOCAL DEVELOPMENT
+    # --------------------------------
+    if os.path.exists(token_file):
+        creds = Credentials.from_authorized_user_file(
+            token_file,
+            self.scopes
+        )
+
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+
+        return creds
+
+    # --------------------------------
+    # STREAMLIT CLOUD
+    # --------------------------------
+    try:
+        google = st.secrets["google"]
+
+        creds = Credentials(
+            token=google.get("token"),
+            refresh_token=google.get("refresh_token"),
+            token_uri=google.get(
+                "token_uri",
+                "https://oauth2.googleapis.com/token"
+            ),
+            client_id=google["client_id"],
+            client_secret=google["client_secret"],
+            scopes=self.scopes
+        )
+
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+
+        return creds
+
+    except Exception as e:
+        raise FileNotFoundError(
+            f"Google credentials not found in Streamlit Secrets. Error: {e}"
+        )
 
     def _setup_llm(self):
         return ChatGroq(
