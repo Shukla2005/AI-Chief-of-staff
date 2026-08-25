@@ -28,80 +28,89 @@ def build_gmail_service(credentials):
     return build("gmail", "v1", credentials=credentials)
 
 class AssistantBackend:
+
     def __init__(self, token_file="token.json"):
         self.scopes = [
             "https://www.googleapis.com/auth/calendar",
             "https://www.googleapis.com/auth/gmail.modify"
         ]
+
         self.creds = self._load_credentials(token_file)
         self.llm = self._setup_llm()
         self.checkpointer = InMemorySaver()
-        
-        self.calendar_service = build_resource_service(credentials=self.creds)
-        self.calendar_toolkit = CalendarToolkit(api_resource=self.calendar_service)
+
+        self.calendar_service = build_resource_service(
+            credentials=self.creds
+        )
+
+        self.calendar_toolkit = CalendarToolkit(
+            api_resource=self.calendar_service
+        )
         self.calendar_tools = self.calendar_toolkit.get_tools()
-        
-        self.gmail_service = build_gmail_service(credentials=self.creds)
-        self.gmail_toolkit = GmailToolkit(api_resource=self.gmail_service)
+
+        self.gmail_service = build_gmail_service(
+            credentials=self.creds
+        )
+
+        self.gmail_toolkit = GmailToolkit(
+            api_resource=self.gmail_service
+        )
         self.gmail_tools = self.gmail_toolkit.get_tools()
-        
+
         self.web_search = TavilySearch(k=3)
-        
+
         self.calendar_agent = self._create_calendar_agent()
         self.email_agent = self._create_email_agent()
         self.web_agent = self._create_web_agent()
-        
+
         self.supervisor_agent = self._create_supervisor_agent()
 
-   def _load_credentials(self, token_file):
+    def _load_credentials(self, token_file):
 
-    # --------------------------------
-    # LOCAL DEVELOPMENT
-    # --------------------------------
-    if os.path.exists(token_file):
-        creds = Credentials.from_authorized_user_file(
-            token_file,
-            self.scopes
-        )
+        # Local development
+        if os.path.exists(token_file):
+            creds = Credentials.from_authorized_user_file(
+                token_file,
+                self.scopes
+            )
 
-        if creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            if creds.expired and creds.refresh_token:
+                creds.refresh(Request())
 
-        return creds
+            return creds
 
-    # --------------------------------
-    # STREAMLIT CLOUD
-    # --------------------------------
-    try:
-        google = st.secrets["google"]
+        # Streamlit Cloud
+        try:
+            google = st.secrets["google"]
 
-        creds = Credentials(
-            token=google.get("token"),
-            refresh_token=google.get("refresh_token"),
-            token_uri=google.get(
-                "token_uri",
-                "https://oauth2.googleapis.com/token"
-            ),
-            client_id=google["client_id"],
-            client_secret=google["client_secret"],
-            scopes=self.scopes
-        )
+            creds = Credentials(
+                token=google.get("token"),
+                refresh_token=google.get("refresh_token"),
+                token_uri=google.get(
+                    "token_uri",
+                    "https://oauth2.googleapis.com/token"
+                ),
+                client_id=google["client_id"],
+                client_secret=google["client_secret"],
+                scopes=self.scopes
+            )
 
-        if creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            if creds.expired and creds.refresh_token:
+                creds.refresh(Request())
 
-        return creds
+            return creds
 
-    except Exception as e:
-        raise FileNotFoundError(
-            f"Google credentials not found in Streamlit Secrets. Error: {e}"
-        )
+        except Exception as e:
+            raise FileNotFoundError(
+                "Google credentials not configured in Streamlit Secrets. "
+                f"Error: {e}"
+            )
 
     def _setup_llm(self):
         return ChatGroq(
             model="qwen/qwen3-32b",
             temperature=0,
-            reasoning_format="parsed",
+            reasoning_format="parsed"
         )
 
     def _create_calendar_agent(self):
